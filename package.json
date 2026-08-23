@@ -1,0 +1,30 @@
+{
+  "name": "discord-mocker-monorepo",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=20.11.0"
+  },
+  "scripts": {
+    "build": "tsc -b && pnpm --filter @discord-mocker/web build",
+    "dev": "pnpm build:packages && concurrently -n tsc,server,web -c blue,magenta,cyan \"tsc -b --watch --preserveWatchOutput\" \"pnpm --filter @discord-mocker/server dev\" \"pnpm --filter @discord-mocker/web dev\"",
+    "build:packages": "tsc -b",
+    "check": "biome check .",
+    "check:fix": "biome check --write .",
+    "typecheck": "tsc -b --force",
+    "clean": "rm -rf packages/*/dist packages/*/*.tsbuildinfo packages/web/dist"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.3.14",
+    "concurrently": "^9.2.1",
+    "typescript": "^5.9.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@biomejs/biome",
+      "esbuild"
+    ]
+  }
+}

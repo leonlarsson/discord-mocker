@@ -1,0 +1,33 @@
+{
+  "name": "@discord-mocker/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "dev": "tsx watch src/dev.ts"
+  },
+  "dependencies": {
+    "@discord-mocker/protocol": "workspace:*",
+    "@hono/node-server": "^1.15.4",
+    "discord-api-types": "^0.38.31",
+    "hono": "^4.10.3",
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "@types/ws": "^8.18.1",
+    "tsx": "^4.20.6"
+  }
+}

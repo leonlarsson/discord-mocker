@@ -1,0 +1,20 @@
+{
+  "name": "@discord-mocker/example-basic-bot",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "mocker": "discord-mocker"
+  },
+  "dependencies": {
+    "discord.js": "^14.27.0",
+    "@discord-mocker/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "tsx": "^4.20.6",
+    "discord-mocker": "workspace:*"
+  }
+}

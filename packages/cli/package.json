@@ -1,0 +1,24 @@
+{
+  "name": "discord-mocker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "discord-mocker": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@discord-mocker/protocol": "workspace:*",
+    "@discord-mocker/server": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3"
+  }
+}

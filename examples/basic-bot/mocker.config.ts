@@ -1,0 +1,35 @@
+import { defineConfig } from "@discord-mocker/protocol";
+
+/**
+ * Checked in next to the bot, so everyone testing it gets the same world:
+ * the same channel names, the same roles, the same test users.
+ */
+export default defineConfig({
+  port: 5100,
+  defaultUser: "leon",
+  bot: { username: "Test Bot" },
+  users: [
+    { username: "leon", globalName: "Leon", avatarColor: "#5865f2" },
+    { username: "testuser", globalName: "Test User", avatarColor: "#57f287" },
+    { username: "moderator", globalName: "Mod", avatarColor: "#eb459e" },
+  ],
+  guilds: [
+    {
+      name: "Mocker Test Server",
+      owner: "leon",
+      roles: [
+        { name: "Admin", color: "#eb459e", permissions: "8", hoist: true },
+        { name: "Moderator", color: "#3ba55c", hoist: true },
+      ],
+      channels: [
+        { name: "general", topic: "General chatter" },
+        { name: "bot-testing", topic: "Where the bot gets poked" },
+      ],
+      members: [
+        { user: "leon", roles: ["Admin"] },
+        { user: "moderator", roles: ["Moderator"] },
+        { user: "testuser" },
+      ],
+    },
+  ],
+});

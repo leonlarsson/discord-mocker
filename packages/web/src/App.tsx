@@ -135,6 +135,14 @@ export function App() {
             messages={messages}
             usersById={usersById}
             context={{ usersById, guild }}
+            onComponentUse={(message, input) =>
+              bridge.sendComponentUse({
+                channelId: channel.id,
+                userId: activeUserId,
+                messageId: message.id,
+                ...input,
+              })
+            }
           />
 
           <Composer

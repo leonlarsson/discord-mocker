@@ -3,6 +3,7 @@ import type { APIEmbed, APIMessage } from "discord-api-types/v10";
 import { MessageFlags } from "discord-api-types/v10";
 import { type MentionContext, renderContent } from "../lib/markdown.js";
 import { Avatar } from "./Avatar.js";
+import { type ComponentUseInput, MessageComponents } from "./MessageComponents.js";
 
 function formatTimestamp(iso: string): string {
   const date = new Date(iso);
@@ -49,9 +50,17 @@ interface MessageProps {
   invoker: BridgeUser | undefined;
   grouped: boolean;
   context: MentionContext;
+  onComponentUse: (message: APIMessage, input: ComponentUseInput) => void;
 }
 
-export function Message({ message, author, invoker, grouped, context }: MessageProps) {
+export function Message({
+  message,
+  author,
+  invoker,
+  grouped,
+  context,
+  onComponentUse,
+}: MessageProps) {
   const flags = message.flags ?? 0;
   const isEphemeral = Boolean(flags & MessageFlags.Ephemeral);
   const isLoading = Boolean(flags & MessageFlags.Loading);
@@ -118,6 +127,14 @@ export function Message({ message, author, invoker, grouped, context }: MessageP
             // biome-ignore lint/suspicious/noArrayIndexKey: embeds never reorder within a message
             <Embed key={`${embed.title ?? "embed"}-${index}`} embed={embed} context={context} />
           ))}
+
+          {message.components && message.components.length > 0 ? (
+            <MessageComponents
+              components={message.components}
+              context={context}
+              onUse={(input) => onComponentUse(message, input)}
+            />
+          ) : null}
         </>
       )}
 

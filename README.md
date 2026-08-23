@@ -60,6 +60,16 @@ For working on the mocker itself, `pnpm dev` runs the server and the UI with wat
 - `reply`, `deferReply` + `editReply` (with the real "Bot is thinking…" state), `followUp`,
   ephemeral replies, and deleting responses
 
+**Message components**
+- Buttons in every style, including disabled and link buttons
+- String select menus, with descriptions, placeholders and multi-select (`min_values`/
+  `max_values`) — a multi-select submits when it closes, as Discord's does
+- User, role, mentionable and channel selects, with their options drawn from the mocked
+  world and their `resolved` payload filled in, so `interaction.users` and
+  `interaction.roles` work rather than coming back empty
+- `update()` and `deferUpdate()` edit the message the component lives on; `reply()` and
+  `deferReply()` post a new one — the same split Discord makes
+
 **The client**
 - Guild rail, channel sidebar, member list, message grouping, embeds with inline fields
 - Discord-flavoured markdown: bold, italic, underline, strike, spoilers, code, code blocks,
@@ -112,7 +122,9 @@ Everything is optional — with no config at all, the mocker boots a sensible de
 
 ## Not there yet
 
-Buttons, select menus, modals, and context menus — the message renderer draws components but
-nothing routes their interactions back yet. Also: attachments, threads, reactions, HTTP
-interaction endpoint mode (Ed25519-signed POSTs for serverless bots), and a headless
-assertion API for running the same flows in CI.
+Modals and context menus. Also: attachments, threads, reactions, HTTP interaction endpoint
+mode (Ed25519-signed POSTs for serverless bots), and a headless assertion API for running
+the same flows in CI.
+
+One deliberate deviation: a component's `update()` does not badge its message "(edited)",
+matching what you see in real bot panels, while `editReply` on a normal reply does.

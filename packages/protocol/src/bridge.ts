@@ -89,6 +89,18 @@ export type ServerToClient =
   | { t: "inspector"; d: InspectorEntry }
   | { t: "autocomplete"; d: { nonce: string; choices: APIApplicationCommandOptionChoice[] } };
 
+/** A button press or select-menu submission from the rendered message. */
+export interface ComponentUse {
+  channelId: string;
+  userId: string;
+  /** The message carrying the component. */
+  messageId: string;
+  customId: string;
+  componentType: number;
+  /** Selected values, for select menus. */
+  values?: string[];
+}
+
 export type ClientToServer =
   | {
       t: "interaction:command";
@@ -105,4 +117,5 @@ export type ClientToServer =
         focused: string;
       };
     }
+  | { t: "interaction:component"; d: ComponentUse }
   | { t: "message:send"; d: { channelId: string; userId: string; content: string } };

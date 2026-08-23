@@ -1,13 +1,27 @@
-import type { BridgeSnapshot, ClientToServer, MockerConfig } from "@discord-mocker/protocol";
-import type { APIChatInputApplicationCommandInteraction, APIMessage } from "discord-api-types/v10";
+import type {
+  BridgeSnapshot,
+  ClientToServer,
+  ComponentUse,
+  MockerConfig,
+} from "@discord-mocker/protocol";
+import type {
+  APIChatInputApplicationCommandInteraction,
+  APIMessage,
+  APIMessageComponentInteraction,
+} from "discord-api-types/v10";
 import { GatewayDispatchEvents, InteractionType, MessageFlags } from "discord-api-types/v10";
 import { Emitter } from "./events.js";
-import { createCommandInteraction, createInteractionMetadata, createMessage } from "./factories.js";
+import {
+  createCommandInteraction,
+  createComponentInteraction,
+  createInteractionMetadata,
+  createMessage,
+} from "./factories.js";
 import { GatewayServer } from "./gateway.js";
 import { World } from "./world.js";
 
 export interface PendingInteraction {
-  interaction: APIChatInputApplicationCommandInteraction;
+  interaction: APIChatInputApplicationCommandInteraction | APIMessageComponentInteraction;
   channelId: string;
   guildId: string;
   userId: string;
@@ -17,6 +31,13 @@ export interface PendingInteraction {
   replied: boolean;
   /** Set for autocomplete interactions, so results can be routed back to the composer. */
   autocompleteNonce?: string;
+  /** For component interactions: the message the component lives on. */
+  sourceMessageId?: string;
+  /**
+   * Whether follow-up edits target the source message rather than a new reply.
+   * `update()` and `deferUpdate()` set this; `reply()` and `deferReply()` do not.
+   */
+  targetsSource?: boolean;
 }
 
 /**
@@ -59,6 +80,9 @@ export class Mocker {
         break;
       case "interaction:autocomplete":
         this.runAutocomplete(message.d);
+        break;
+      case "interaction:component":
+        this.runComponent(message.d);
         break;
       case "message:send":
         this.sendUserMessage(message.d);
@@ -138,6 +162,39 @@ export class Mocker {
       autocompleteNonce: input.nonce,
     });
 
+    this.gateway.dispatch(GatewayDispatchEvents.InteractionCreate, interaction);
+  }
+
+  private runComponent(input: ComponentUse): void {
+    const guild = this.world.guildForChannel(input.channelId);
+    const found = this.world.findMessage(input.messageId);
+    if (!guild || !found) return;
+
+    const interaction = createComponentInteraction({
+      world: this.world,
+      guild,
+      channelId: input.channelId,
+      userId: input.userId,
+      message: found.message,
+      customId: input.customId,
+      componentType: input.componentType,
+      ...(input.values ? { values: input.values } : {}),
+    });
+
+    this.pending.set(interaction.token, {
+      interaction,
+      channelId: input.channelId,
+      guildId: guild.id,
+      userId: input.userId,
+      deferred: false,
+      replied: false,
+      sourceMessageId: found.message.id,
+    });
+
+    this.emitter.record("mocker", `Component "${input.customId}" used`, {
+      componentType: input.componentType,
+      values: input.values,
+    });
     this.gateway.dispatch(GatewayDispatchEvents.InteractionCreate, interaction);
   }
 

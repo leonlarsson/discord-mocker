@@ -1,6 +1,7 @@
 import type {
   BridgeSnapshot,
   ClientToServer,
+  ComponentUse,
   ServerToClient,
   SubmittedOption,
 } from "@discord-mocker/protocol";
@@ -19,6 +20,7 @@ export interface Bridge {
     commandId: string,
     options: SubmittedOption[],
   ) => void;
+  sendComponentUse: (input: ComponentUse) => void;
   requestAutocomplete: (input: {
     channelId: string;
     userId: string;
@@ -92,6 +94,7 @@ export function useBridge(): Bridge {
         send({ t: "message:send", d: { channelId, userId, content } }),
       runCommand: (channelId, userId, commandId, options) =>
         send({ t: "interaction:command", d: { channelId, userId, commandId, options } }),
+      sendComponentUse: (input) => send({ t: "interaction:component", d: input }),
       requestAutocomplete,
     }),
     [snapshot, connected, send, requestAutocomplete],

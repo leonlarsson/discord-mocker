@@ -13,7 +13,7 @@
     "build:packages": "tsc -b",
     "check": "biome check .",
     "check:fix": "biome check --write .",
-    "typecheck": "tsc -b --force",
+    "typecheck": "tsc -b --force && pnpm --filter @discord-mocker/web exec tsc --noEmit && pnpm --filter @discord-mocker/example-basic-bot exec tsc --noEmit",
     "clean": "rm -rf packages/*/dist packages/*/*.tsbuildinfo packages/web/dist"
   },
   "devDependencies": {

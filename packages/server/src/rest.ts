@@ -20,6 +20,18 @@ import type { Mocker, PendingInteraction } from "./mocker.js";
  * Reads a request body as JSON, transparently unwrapping the multipart form
  * discord.js uses whenever a request carries attachments.
  */
+/**
+ * Which message `@original` refers to for a given interaction.
+ *
+ * For `reply()`/`deferReply()` it is the new response message. For a component's
+ * `update()`/`deferUpdate()` it is the message the component sits on — the same
+ * split real Discord makes.
+ */
+function originalMessageId(pending: PendingInteraction | undefined): string | undefined {
+  if (!pending) return undefined;
+  return pending.targetsSource ? pending.sourceMessageId : pending.responseMessageId;
+}
+
 async function readBody<T>(c: Context): Promise<T> {
   const contentType = c.req.header("content-type") ?? "";
   if (contentType.includes("multipart/form-data")) {
@@ -210,6 +222,32 @@ export function createRestApp(mocker: Mocker): Hono {
         message = materializeResponse(mocker, pending, data, { loading: true });
         break;
 
+      case InteractionResponseType.UpdateMessage: {
+        if (pending.replied)
+          return c.json({ message: "Interaction has already been acknowledged", code: 40060 }, 400);
+        pending.replied = true;
+        pending.targetsSource = true;
+
+        const source = pending.sourceMessageId
+          ? mocker.world.findMessage(pending.sourceMessageId)
+          : undefined;
+        if (!source) return c.json({ message: "Unknown Message", code: 10008 }, 404);
+
+        message = applyMessageEdit(source.message, data ?? {}, { markEdited: false });
+        mocker.republishMessage(source.channelId, message);
+        break;
+      }
+
+      case InteractionResponseType.DeferredMessageUpdate: {
+        if (pending.replied)
+          return c.json({ message: "Interaction has already been acknowledged", code: 40060 }, 400);
+        // Acknowledged silently: nothing changes until the bot edits.
+        pending.replied = true;
+        pending.deferred = true;
+        pending.targetsSource = true;
+        break;
+      }
+
       case InteractionResponseType.ApplicationCommandAutocompleteResult: {
         const choices = (data as { choices?: [] } | undefined)?.choices ?? [];
         if (pending.autocompleteNonce) {
@@ -248,7 +286,7 @@ export function createRestApp(mocker: Mocker): Hono {
   api.get("/webhooks/:applicationId/:token/messages/:messageId", (c) => {
     const pending = mocker.pending.get(c.req.param("token"));
     const messageId = c.req.param("messageId");
-    const targetId = messageId === "@original" ? pending?.responseMessageId : messageId;
+    const targetId = messageId === "@original" ? originalMessageId(pending) : messageId;
     const found = targetId ? mocker.world.findMessage(targetId) : undefined;
     if (!found) return c.json({ message: "Unknown Message", code: 10008 }, 404);
     return c.json(found.message);
@@ -257,12 +295,15 @@ export function createRestApp(mocker: Mocker): Hono {
   api.patch("/webhooks/:applicationId/:token/messages/:messageId", async (c) => {
     const pending = mocker.pending.get(c.req.param("token"));
     const messageId = c.req.param("messageId");
-    const targetId = messageId === "@original" ? pending?.responseMessageId : messageId;
+    const targetId = messageId === "@original" ? originalMessageId(pending) : messageId;
     const found = targetId ? mocker.world.findMessage(targetId) : undefined;
     if (!found) return c.json({ message: "Unknown Message", code: 10008 }, 404);
 
     const data = await readBody<APIInteractionResponseCallbackData>(c);
-    const updated = applyMessageEdit(found.message, data);
+    // Editing a component's own message is an update, not a user-visible edit.
+    const updated = applyMessageEdit(found.message, data, {
+      markEdited: !pending?.targetsSource,
+    });
     mocker.republishMessage(found.channelId, updated);
     return c.json(updated);
   });
@@ -270,7 +311,7 @@ export function createRestApp(mocker: Mocker): Hono {
   api.delete("/webhooks/:applicationId/:token/messages/:messageId", (c) => {
     const pending = mocker.pending.get(c.req.param("token"));
     const messageId = c.req.param("messageId");
-    const targetId = messageId === "@original" ? pending?.responseMessageId : messageId;
+    const targetId = messageId === "@original" ? originalMessageId(pending) : messageId;
     const found = targetId ? mocker.world.findMessage(targetId) : undefined;
     if (found) {
       const messages = mocker.world.messages.get(found.channelId) ?? [];

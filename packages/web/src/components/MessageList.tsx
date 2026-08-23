@@ -3,6 +3,7 @@ import type { APIMessage } from "discord-api-types/v10";
 import { useEffect, useRef } from "react";
 import type { MentionContext } from "../lib/markdown.js";
 import { Message } from "./Message.js";
+import type { ComponentUseInput } from "./MessageComponents.js";
 
 /** Discord groups consecutive messages from one author within seven minutes. */
 const GROUP_WINDOW_MS = 7 * 60 * 1000;
@@ -12,9 +13,16 @@ interface MessageListProps {
   messages: APIMessage[];
   usersById: Map<string, BridgeUser>;
   context: MentionContext;
+  onComponentUse: (message: APIMessage, input: ComponentUseInput) => void;
 }
 
-export function MessageList({ channelName, messages, usersById, context }: MessageListProps) {
+export function MessageList({
+  channelName,
+  messages,
+  usersById,
+  context,
+  onComponentUse,
+}: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const newest = messages.at(-1);
@@ -55,6 +63,7 @@ export function MessageList({ channelName, messages, usersById, context }: Messa
               invoker={invokerId ? usersById.get(invokerId) : undefined}
               grouped={grouped}
               context={context}
+              onComponentUse={onComponentUse}
             />
           );
         })}

@@ -1003,3 +1003,171 @@ button {
   border-radius: 3px;
   padding: 0 2px;
 }
+
+/* ------------------------------------------------------- select menus ----- */
+
+.action-row {
+  align-items: center;
+}
+
+.discord-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-decoration: none;
+}
+
+.discord-button.primary {
+  background: var(--brand);
+}
+
+.discord-button.primary:hover:not(:disabled) {
+  background: var(--brand-hover);
+}
+
+.discord-button.secondary:hover:not(:disabled) {
+  background: #6d6f78;
+}
+
+.discord-button.success:hover:not(:disabled) {
+  background: #1a6334;
+}
+
+.discord-button.danger:hover:not(:disabled) {
+  background: #a12828;
+}
+
+.discord-button.premium {
+  background: #4e5058;
+}
+
+.button-external {
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.component-emoji {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.select-container {
+  position: relative;
+  min-width: 240px;
+  max-width: 400px;
+  flex: 1 1 240px;
+}
+
+.select-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #1e1f22;
+  border: 1px solid #1e1f22;
+  border-radius: 4px;
+  padding: 8px 12px;
+  min-height: 40px;
+  font-size: 14px;
+  text-align: left;
+}
+
+.select-trigger:hover:not(:disabled) {
+  border-color: #4e5058;
+}
+
+.select-trigger.open {
+  border-color: var(--brand);
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.select-trigger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.select-placeholder {
+  color: var(--text-muted);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.select-value {
+  color: var(--text-normal);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.select-chevron {
+  color: var(--interactive-normal);
+  font-size: 14px;
+  line-height: 1;
+}
+
+.select-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: #2b2d31;
+  border: 1px solid var(--brand);
+  border-top: none;
+  border-radius: 0 0 4px 4px;
+  max-height: 300px;
+  overflow-y: auto;
+  z-index: 30;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.24);
+}
+
+.select-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  text-align: left;
+  font-size: 14px;
+  color: var(--text-normal);
+}
+
+.select-option:hover {
+  background: var(--bg-hover);
+}
+
+.select-option.selected {
+  background: rgba(88, 101, 242, 0.2);
+}
+
+.select-option-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+}
+
+.select-option-description {
+  color: var(--text-muted);
+  font-size: 12px;
+  margin-left: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 50%;
+}
+
+.select-check {
+  color: var(--brand);
+  font-weight: 700;
+}
+
+.select-empty {
+  padding: 12px;
+  color: var(--text-muted);
+  font-size: 13px;
+}

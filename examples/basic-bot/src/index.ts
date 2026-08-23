@@ -6,6 +6,7 @@
  * gateway included, at the mocker. Point it back at Discord and this bot runs
  * unchanged in production.
  */
+import { deflateSync } from "node:zlib";
 import {
   ActionRowBuilder,
   ButtonBuilder,
@@ -49,6 +50,9 @@ const commands = [
     .setName("slow")
     .setDescription("Defers, then edits the reply two seconds later"),
   new SlashCommandBuilder().setName("whoami").setDescription("Shows who invoked the command"),
+  new SlashCommandBuilder()
+    .setName("card")
+    .setDescription("Sends a generated image card, the way a stats bot does"),
   new SlashCommandBuilder().setName("panel").setDescription("Buttons and select menus to poke at"),
   new SlashCommandBuilder()
     .setName("search")
@@ -63,6 +67,57 @@ const commands = [
 ];
 
 const FRUITS = ["Apple", "Apricot", "Banana", "Blackberry", "Cherry", "Grape", "Mango", "Peach"];
+
+/** A minimal uncompressed PNG, so the example needs no image dependency. */
+function makeCardPng(width = 480, height = 160): Buffer {
+  const crcTable = Array.from({ length: 256 }, (_, index) => {
+    let value = index;
+    for (let bit = 0; bit < 8; bit += 1) {
+      value = value & 1 ? 0xedb88320 ^ (value >>> 1) : value >>> 1;
+    }
+    return value >>> 0;
+  });
+
+  const crc32 = (buffer: Buffer) => {
+    let crc = 0xffffffff;
+    for (const byte of buffer) crc = (crcTable[(crc ^ byte) & 0xff] ?? 0) ^ (crc >>> 8);
+    return (crc ^ 0xffffffff) >>> 0;
+  };
+
+  const chunk = (type: string, data: Buffer) => {
+    const length = Buffer.alloc(4);
+    length.writeUInt32BE(data.byteLength);
+    const body = Buffer.concat([Buffer.from(type, "ascii"), data]);
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(crc32(body));
+    return Buffer.concat([length, body, crc]);
+  };
+
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8; // bit depth
+  ihdr[9] = 2; // truecolour
+
+  // One filter byte per row, then a blurple-to-teal gradient.
+  const raw = Buffer.alloc(height * (1 + width * 3));
+  for (let y = 0; y < height; y += 1) {
+    const rowStart = y * (1 + width * 3);
+    for (let x = 0; x < width; x += 1) {
+      const pixel = rowStart + 1 + x * 3;
+      raw[pixel] = Math.round(88 + (x / width) * 40);
+      raw[pixel + 1] = Math.round(101 + (y / height) * 120);
+      raw[pixel + 2] = Math.round(242 - (x / width) * 80);
+    }
+  }
+
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk("IHDR", ihdr),
+    chunk("IDAT", deflateSync(raw)),
+    chunk("IEND", Buffer.alloc(0)),
+  ]);
+}
 
 /** Counter state per panel message, to show `update()` mutating a message in place. */
 const counters = new Map<string, number>();
@@ -155,6 +210,27 @@ client.on(Events.InteractionCreate, async (interaction) => {
       await interaction.deferReply();
       await new Promise((resolve) => setTimeout(resolve, 2000));
       await interaction.editReply("Done thinking.");
+      break;
+    }
+
+    case "card": {
+      // A stand-in for a bot that renders its output as an image and references
+      // it from an embed with attachment://.
+      const png = makeCardPng();
+      const embed = new EmbedBuilder()
+        .setColor(0xf0b232)
+        .setAuthor({ name: "Mock Stats" })
+        .setTitle("Battlefield Mocker | Overview")
+        .setDescription("Generated card, attached as a file and shown via `attachment://`.")
+        .setImage("attachment://card.png")
+        .setThumbnail("attachment://card.png")
+        .setFooter({ text: "Stats from" })
+        .setTimestamp();
+
+      await interaction.reply({
+        embeds: [embed],
+        files: [{ attachment: png, name: "card.png" }],
+      });
       break;
     }
 

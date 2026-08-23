@@ -2,6 +2,7 @@ import type { SubmittedOption } from "@discord-mocker/protocol";
 import { generateSnowflake } from "@discord-mocker/protocol";
 import type {
   APIApplicationCommandInteractionDataOption,
+  APIAttachment,
   APIChatInputApplicationCommandInteraction,
   APIInteractionDataResolved,
   APIInteractionResponseCallbackData,
@@ -38,6 +39,7 @@ export interface CreateMessageInput {
   data?: APIInteractionResponseCallbackData;
   interactionMetadata?: APIMessageInteractionMetadata;
   extraFlags?: number;
+  attachments?: APIAttachment[];
 }
 
 export function createMessage(input: CreateMessageInput): APIMessage {
@@ -57,7 +59,7 @@ export function createMessage(input: CreateMessageInput): APIMessage {
     mention_everyone: false,
     mentions: [],
     mention_roles: [],
-    attachments: [],
+    attachments: input.attachments ?? [],
     embeds: input.data?.embeds ?? [],
     components: input.data?.components ?? [],
     pinned: false,
@@ -76,11 +78,12 @@ export function createMessage(input: CreateMessageInput): APIMessage {
 export function applyMessageEdit(
   message: APIMessage,
   data: APIInteractionResponseCallbackData,
-  options: { markEdited?: boolean } = {},
+  options: { markEdited?: boolean; attachments?: APIAttachment[] } = {},
 ): APIMessage {
   if (data.content !== undefined) message.content = data.content ?? "";
   if (data.embeds !== undefined) message.embeds = data.embeds ?? [];
   if (data.components !== undefined) message.components = data.components ?? [];
+  if (options.attachments !== undefined) message.attachments = options.attachments;
   // Clearing the loading flag is what turns "Bot is thinking…" into the real reply.
   message.flags = (message.flags ?? 0) & ~MessageFlags.Loading;
   if (options.markEdited ?? true) message.edited_timestamp = new Date().toISOString();

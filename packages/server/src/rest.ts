@@ -1,6 +1,7 @@
 import { generateSnowflake, REST_API_VERSION } from "@discord-mocker/protocol";
 import type {
   APIApplicationCommand,
+  APIAttachment,
   APIInteractionResponse,
   APIInteractionResponseCallbackData,
   APIMessage,
@@ -13,6 +14,7 @@ import {
 } from "discord-api-types/v10";
 import type { Context } from "hono";
 import { Hono } from "hono";
+import { AttachmentStore, resolveAttachmentUrls } from "./attachments.js";
 import { applyMessageEdit, createInteractionMetadata, createMessage } from "./factories.js";
 import type { Mocker, PendingInteraction } from "./mocker.js";
 
@@ -32,18 +34,58 @@ function originalMessageId(pending: PendingInteraction | undefined): string | un
   return pending.targetsSource ? pending.sourceMessageId : pending.responseMessageId;
 }
 
-async function readBody<T>(c: Context): Promise<T> {
+/**
+ * Reads a request body, storing any uploaded files and rewriting the
+ * `attachment://` references that point at them.
+ *
+ * discord.js sends attachments as a multipart form: the JSON goes in
+ * `payload_json` and each file in `files[n]`. Keeping the bytes is what lets a
+ * bot whose entire output is a rendered image show that image in the mocker.
+ */
+async function readBody<T>(c: Context, mocker: Mocker): Promise<T> {
   const contentType = c.req.header("content-type") ?? "";
-  if (contentType.includes("multipart/form-data")) {
-    const form = await c.req.formData();
-    const payload = form.get("payload_json");
-    return (typeof payload === "string" ? JSON.parse(payload) : {}) as T;
+
+  if (!contentType.includes("multipart/form-data")) {
+    try {
+      return (await c.req.json()) as T;
+    } catch {
+      return {} as T;
+    }
   }
-  try {
-    return (await c.req.json()) as T;
-  } catch {
-    return {} as T;
+
+  const form = await c.req.formData();
+  const raw = form.get("payload_json");
+  const payload = (typeof raw === "string" ? JSON.parse(raw) : {}) as T;
+
+  const host = c.req.header("host") ?? "localhost";
+  const urlsByFilename = new Map<string, string>();
+  const stored: APIAttachment[] = [];
+
+  for (const [field, value] of form.entries()) {
+    if (!field.startsWith("files[") || typeof value === "string") continue;
+    const file = value as File;
+    const data = Buffer.from(await file.arrayBuffer());
+    const entry = mocker.attachments.add(file.name, file.type || "application/octet-stream", data);
+    urlsByFilename.set(file.name, mocker.attachments.urlFor(entry, host));
+    stored.push(mocker.attachments.toApiAttachment(entry, host, stored.length));
   }
+
+  if (stored.length === 0) return payload;
+
+  const resolved = resolveAttachmentUrls(payload, urlsByFilename) as T & {
+    attachments?: APIAttachment[];
+  };
+  // Merge the bot's attachment metadata (descriptions, ordering) with what we stored.
+  resolved.attachments = stored.map((attachment, index) => ({
+    ...attachment,
+    ...(resolved.attachments?.[index] ?? {}),
+    url: attachment.url,
+    proxy_url: attachment.proxy_url,
+    size: attachment.size,
+    ...(attachment.width ? { width: attachment.width } : {}),
+    ...(attachment.height ? { height: attachment.height } : {}),
+  }));
+  return resolved;
 }
 
 function registerCommands(
@@ -96,6 +138,7 @@ function materializeResponse(
         guildId: pending.guildId,
         author: mocker.world.botUser,
         data,
+        ...(storedAttachments(data) ? { attachments: storedAttachments(data) } : {}),
         interactionMetadata: createInteractionMetadata(
           pending.interaction,
           mocker.world.users.get(pending.userId) ?? mocker.world.botUser,
@@ -107,6 +150,21 @@ function materializeResponse(
   pending.responseMessageId = message.id;
   mocker.publishMessage(pending.channelId, message);
   return message;
+}
+
+/**
+ * The complete attachment records `readBody` stored for this request.
+ *
+ * A request body may also carry attachment *metadata* (id, filename, description)
+ * with no file behind it; only entries with a URL are real stored files.
+ */
+function storedAttachments(payload: unknown): APIAttachment[] | undefined {
+  const value = (payload as { attachments?: unknown } | undefined)?.attachments;
+  if (!Array.isArray(value)) return undefined;
+  const complete = value.filter(
+    (item): item is APIAttachment => typeof item === "object" && item !== null && "url" in item,
+  );
+  return complete.length > 0 ? complete : undefined;
 }
 
 export function createRestApp(mocker: Mocker): Hono {
@@ -167,20 +225,20 @@ export function createRestApp(mocker: Mocker): Hono {
   // --- Command registration -------------------------------------------------
 
   api.put("/applications/:applicationId/commands", async (c) =>
-    c.json(registerCommands(mocker, await readBody(c))),
+    c.json(registerCommands(mocker, await readBody(c, mocker))),
   );
 
   api.put("/applications/:applicationId/guilds/:guildId/commands", async (c) =>
-    c.json(registerCommands(mocker, await readBody(c), c.req.param("guildId"))),
+    c.json(registerCommands(mocker, await readBody(c, mocker), c.req.param("guildId"))),
   );
 
   api.post("/applications/:applicationId/commands", async (c) => {
-    const [command] = registerCommands(mocker, [await readBody(c)]);
+    const [command] = registerCommands(mocker, [await readBody(c, mocker)]);
     return c.json(command, 201);
   });
 
   api.post("/applications/:applicationId/guilds/:guildId/commands", async (c) => {
-    const [command] = registerCommands(mocker, [await readBody(c)], c.req.param("guildId"));
+    const [command] = registerCommands(mocker, [await readBody(c, mocker)], c.req.param("guildId"));
     return c.json(command, 201);
   });
 
@@ -202,7 +260,7 @@ export function createRestApp(mocker: Mocker): Hono {
     const pending = mocker.pending.get(c.req.param("token"));
     if (!pending) return c.json({ message: "Unknown interaction", code: 10062 }, 404);
 
-    const body = await readBody<APIInteractionResponse>(c);
+    const body = await readBody<APIInteractionResponse>(c, mocker);
     const data = "data" in body ? (body.data as APIInteractionResponseCallbackData) : undefined;
     let message: APIMessage | undefined;
 
@@ -233,7 +291,10 @@ export function createRestApp(mocker: Mocker): Hono {
           : undefined;
         if (!source) return c.json({ message: "Unknown Message", code: 10008 }, 404);
 
-        message = applyMessageEdit(source.message, data ?? {}, { markEdited: false });
+        message = applyMessageEdit(source.message, data ?? {}, {
+          markEdited: false,
+          ...(storedAttachments(data) ? { attachments: storedAttachments(data) } : {}),
+        });
         mocker.republishMessage(source.channelId, message);
         break;
       }
@@ -299,10 +360,11 @@ export function createRestApp(mocker: Mocker): Hono {
     const found = targetId ? mocker.world.findMessage(targetId) : undefined;
     if (!found) return c.json({ message: "Unknown Message", code: 10008 }, 404);
 
-    const data = await readBody<APIInteractionResponseCallbackData>(c);
+    const data = await readBody<APIInteractionResponseCallbackData>(c, mocker);
     // Editing a component's own message is an update, not a user-visible edit.
     const updated = applyMessageEdit(found.message, data, {
       markEdited: !pending?.targetsSource,
+      ...(storedAttachments(data) ? { attachments: storedAttachments(data) } : {}),
     });
     mocker.republishMessage(found.channelId, updated);
     return c.json(updated);
@@ -331,12 +393,13 @@ export function createRestApp(mocker: Mocker): Hono {
     const pending = mocker.pending.get(c.req.param("token"));
     if (!pending) return c.json({ message: "Unknown Webhook", code: 10015 }, 404);
 
-    const data = await readBody<APIInteractionResponseCallbackData>(c);
+    const data = await readBody<APIInteractionResponseCallbackData>(c, mocker);
     const message = createMessage({
       channelId: pending.channelId,
       guildId: pending.guildId,
       author: mocker.world.botUser,
       data,
+      ...(storedAttachments(data) ? { attachments: storedAttachments(data) } : {}),
       interactionMetadata: createInteractionMetadata(
         pending.interaction,
         mocker.world.users.get(pending.userId) ?? mocker.world.botUser,
@@ -359,12 +422,13 @@ export function createRestApp(mocker: Mocker): Hono {
     const guild = mocker.world.guildForChannel(channelId);
     if (!guild) return c.json({ message: "Unknown Channel", code: 10003 }, 404);
 
-    const data = await readBody<APIInteractionResponseCallbackData>(c);
+    const data = await readBody<APIInteractionResponseCallbackData>(c, mocker);
     const message = createMessage({
       channelId,
       guildId: guild.id,
       author: mocker.world.botUser,
       data,
+      ...(storedAttachments(data) ? { attachments: storedAttachments(data) } : {}),
     });
     mocker.publishMessage(channelId, message);
     return c.json(message);
@@ -380,6 +444,17 @@ export function createRestApp(mocker: Mocker): Hono {
   });
 
   const app = new Hono();
+
+  // Served from the root, mirroring Discord's separate CDN host.
+  app.get(`${AttachmentStore.ROUTE}/:id/:filename`, (c) => {
+    const stored = mocker.attachments.get(c.req.param("id"));
+    if (!stored) return c.json({ message: "Unknown Attachment", code: 10015 }, 404);
+    return c.body(new Uint8Array(stored.data), 200, {
+      "content-type": stored.contentType,
+      "cache-control": "no-store",
+    });
+  });
+
   app.route(`/api/v${REST_API_VERSION}`, api);
   // discord.js can be pointed at a versionless base too.
   app.route("/api", api);

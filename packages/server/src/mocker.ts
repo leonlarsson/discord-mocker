@@ -10,6 +10,7 @@ import type {
   APIMessageComponentInteraction,
 } from "discord-api-types/v10";
 import { GatewayDispatchEvents, InteractionType, MessageFlags } from "discord-api-types/v10";
+import { AttachmentStore } from "./attachments.js";
 import { Emitter } from "./events.js";
 import {
   createCommandInteraction,
@@ -53,6 +54,8 @@ export class Mocker {
   readonly gateway: GatewayServer;
   /** Live interactions keyed by token — the same lookup real Discord does. */
   readonly pending = new Map<string, PendingInteraction>();
+  /** Files the bot uploaded, served back so its images actually render. */
+  readonly attachments = new AttachmentStore();
 
   constructor(readonly config: MockerConfig) {
     this.world = new World(config);

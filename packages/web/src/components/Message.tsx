@@ -16,29 +16,140 @@ function formatTimestamp(iso: string): string {
 function Embed({ embed, context }: { embed: APIEmbed; context: MentionContext }) {
   const color = embed.color ? `#${embed.color.toString(16).padStart(6, "0")}` : "#4f545c";
 
+  const hasThumbnail = Boolean(embed.thumbnail?.url);
+
   return (
     <div className="embed" style={{ borderLeftColor: color }}>
-      {embed.author ? <div className="embed-author">{embed.author.name}</div> : null}
-      {embed.title ? <div className="embed-title">{embed.title}</div> : null}
-      {embed.description ? (
-        <div className="embed-description">{renderContent(embed.description, context)}</div>
-      ) : null}
-
-      {embed.fields && embed.fields.length > 0 ? (
-        <div className="embed-fields">
-          {embed.fields.map((field) => (
-            <div
-              key={`${field.name}-${field.value}`}
-              className={`embed-field ${field.inline ? "inline" : ""}`}
-            >
-              <div className="embed-field-name">{field.name}</div>
-              <div className="embed-field-value">{renderContent(field.value, context)}</div>
+      <div className={`embed-body ${hasThumbnail ? "with-thumbnail" : ""}`}>
+        <div className="embed-main">
+          {embed.author ? (
+            <div className="embed-author">
+              {embed.author.icon_url ? (
+                <img className="embed-author-icon" src={embed.author.icon_url} alt="" />
+              ) : null}
+              {embed.author.url ? (
+                <a
+                  className="embed-author-link"
+                  href={embed.author.url}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {embed.author.name}
+                </a>
+              ) : (
+                embed.author.name
+              )}
             </div>
-          ))}
-        </div>
-      ) : null}
+          ) : null}
+          {embed.title ? (
+            <div className="embed-title">
+              {embed.url ? (
+                <a className="embed-title-link" href={embed.url} target="_blank" rel="noreferrer">
+                  {embed.title}
+                </a>
+              ) : (
+                embed.title
+              )}
+            </div>
+          ) : null}
+          {embed.description ? (
+            <div className="embed-description">{renderContent(embed.description, context)}</div>
+          ) : null}
 
-      {embed.footer ? <div className="embed-footer">{embed.footer.text}</div> : null}
+          {embed.fields && embed.fields.length > 0 ? (
+            <div className="embed-fields">
+              {embed.fields.map((field) => (
+                <div
+                  key={`${field.name}-${field.value}`}
+                  className={`embed-field ${field.inline ? "inline" : ""}`}
+                >
+                  <div className="embed-field-name">{field.name}</div>
+                  <div className="embed-field-value">{renderContent(field.value, context)}</div>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          {embed.image?.url ? (
+            <img className="embed-image" src={embed.image.url} alt={embed.image.url} />
+          ) : null}
+
+          {embed.footer || embed.timestamp ? (
+            <div className="embed-footer">
+              {embed.footer?.icon_url ? (
+                <img className="embed-footer-icon" src={embed.footer.icon_url} alt="" />
+              ) : null}
+              {embed.footer?.text}
+              {embed.footer?.text && embed.timestamp ? <span className="embed-dot">•</span> : null}
+              {embed.timestamp ? new Date(embed.timestamp).toLocaleString() : null}
+            </div>
+          ) : null}
+        </div>
+
+        {embed.thumbnail?.url ? (
+          <img className="embed-thumbnail" src={embed.thumbnail.url} alt="" />
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Images post as their own block under the message; other files list as a card.
+ *
+ * A file an embed already displays is not shown again: a bot that renders a stat
+ * card and points an embed at it via `attachment://` sends one file, and Discord
+ * shows it once.
+ */
+function Attachments({
+  attachments,
+  embeds,
+}: {
+  attachments: APIMessage["attachments"];
+  embeds: APIMessage["embeds"];
+}) {
+  const usedByEmbed = new Set(
+    embeds.flatMap((embed) =>
+      [
+        embed.image?.url,
+        embed.thumbnail?.url,
+        embed.author?.icon_url,
+        embed.footer?.icon_url,
+      ].filter((url): url is string => Boolean(url)),
+    ),
+  );
+  const visible = attachments.filter((attachment) => !usedByEmbed.has(attachment.url));
+  if (visible.length === 0) return null;
+
+  return (
+    <div className="attachments">
+      {visible.map((attachment) => {
+        const isImage = attachment.content_type?.startsWith("image/") ?? false;
+        return isImage ? (
+          <img
+            key={attachment.id}
+            className="attachment-image"
+            src={attachment.url}
+            alt={attachment.description ?? attachment.filename}
+            style={
+              attachment.width && attachment.height
+                ? { aspectRatio: `${attachment.width} / ${attachment.height}` }
+                : undefined
+            }
+          />
+        ) : (
+          <a
+            key={attachment.id}
+            className="attachment-file"
+            href={attachment.url}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <span className="attachment-name">{attachment.filename}</span>
+            <span className="attachment-size">{Math.ceil(attachment.size / 1024)} KB</span>
+          </a>
+        );
+      })}
     </div>
   );
 }
@@ -122,6 +233,8 @@ export function Message({
               {message.edited_timestamp ? <span className="message-edited">(edited)</span> : null}
             </div>
           ) : null}
+
+          <Attachments attachments={message.attachments} embeds={message.embeds} />
 
           {message.embeds.map((embed, index) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: embeds never reorder within a message

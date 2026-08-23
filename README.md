@@ -37,7 +37,7 @@ did, and the UI's command picker populates itself from whatever your bot registe
 
 ```bash
 pnpm install
-pnpm build
+pnpm build     # required before first run: the CLI serves the built UI
 
 # terminal 1 — the mocker
 cd examples/basic-bot && pnpm mocker
@@ -45,6 +45,10 @@ cd examples/basic-bot && pnpm mocker
 # terminal 2 — the bot
 cd examples/basic-bot && pnpm start
 ```
+
+Windows, macOS and Linux all work the same way. Node 20.11+ is required; a
+`mocker.config.ts` needs Node 22.18+ to be loaded directly, or you can use
+`mocker.config.js` on older versions.
 
 Open <http://localhost:5100> and type `/`.
 

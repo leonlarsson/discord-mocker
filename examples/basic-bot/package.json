@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
-    "mocker": "discord-mocker"
+    "mocker": "pnpm -w run build && node ../../packages/cli/dist/index.js"
   },
   "dependencies": {
     "discord.js": "^14.27.0",
